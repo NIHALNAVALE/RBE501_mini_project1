@@ -183,12 +183,33 @@ fprintf(['Testing ' num2str(nTests) ' random configurations.\n']);
 fprintf('Progress: ');
 nbytes = fprintf('0%%');
 
+% getting the path from make_path.m
+
+path = make_path('infinity');
+scatter3(path(1,:), path(2,:), path(3,:), 'filled');
+
+    % Generate the robot's pose
+targetPose = zeros(6,size(path,2));
+
+for ii = 1:size(path,2)
+    R = M(1:3,1:3);
+%     R = [0 0 -1; 0 1 0; 1 0 0]';
+    T = [R path(:,ii); 0 0 0 1];
+
+%     disp(size(T))
+
+    targetpose = MatrixLog6(T);
+
+%     disp(size(targetPose))
+    targetPose(:,ii) = [targetpose(3,2) targetpose(1,3) targetpose(2,1) targetpose(1:3,4)']';
+end
+
 % Calculate the twist representing the robot's home pose
 currentPose = MatrixLog6(M);
 currentPose = [currentPose(3,2) currentPose(1,3) currentPose(2,1) currentPose(1:3,4)']';
 
 % Set the current joint variables
-currentQ = zeros(1,3);
+currentQ = zeros(1,6);
 
 if plotOn
     robot.teach(currentQ);
@@ -196,22 +217,21 @@ if plotOn
 end
      
 % Generate the test configurations
-q = [linspace(0,pi/2,nTests);
-     linspace(0,pi/6,nTests);
-     linspace(0,pi/6,nTests)];
+% q = [linspace(0,pi/2,nTests);
+%      linspace(0,pi/6,nTests);
+%      linspace(0,pi/6,nTests)];
 
-% q = ikin(S, M, currentQ, targetPose);
+qlist = [];
 
-for ii = 1 : nTests
+for ii = 1 : size(path,2)
     fprintf(repmat('\b',1,nbytes));
-    nbytes = fprintf('%0.f%%', ceil(ii/nTests*100));
+    nbytes = fprintf('%0.f%%', ceil(ii/size(path,2)*100));
     
     % Generate the robot's pose
-    T = fkine(S,M,q(:,ii)');
-    
-    
-    targetPose = MatrixLog6(T);
-    targetPose = [targetPose(3,2) targetPose(1,3) targetPose(2,1) targetPose(1:3,4)']';
+%     
+%     targetPose = zeros(6,size(path,2));
+%     targetPose = MatrixLog6(T);
+%     targetPose = [targetPose(3,2) targetPose(1,3) targetPose(2,1) targetPose(1:3,4)']';
     
     if plotOn
         set(h, 'matrix', T);
@@ -219,37 +239,33 @@ for ii = 1 : nTests
         drawnow;
     end
     
-    % Inverse Kinematics NEWTON-RAPHSON Method
-    while norm(targetPose - currentPose) > 1e-3
-        J = jacob0(S,currentQ);
-       
-        deltaQ = pinv(J)*(targetPose - currentPose);
-        currentQ = currentQ + deltaQ';
+%     T = fkine(S,M,currentQ);
+%     currentPose = MatrixLog6(T);
+%     
+%     currentPose = [currentPose(3,2) ...
+%     currentPose(1,3) ...
+%     currentPose(2,1) ...
+%     currentPose(1:3,4)']';
+ 
+    qlist(ii,1:6) = ikin(S, M, currentQ, targetPose(:,ii));
         
-        T = fkine(S,M,currentQ);
-        currentPose = MatrixLog6(T);
-        currentPose = [currentPose(3,2) ...
-                       currentPose(1,3) ...
-                       currentPose(2,1) ...
-                       currentPose(1:3,4)']';
-        
-        if plotOn
-            try
-                robot.teach(currentQ);
-                drawnow;
-            catch e
-                continue;
-            end
-        end
-    end
+%         if plotOn
+%             try
+%                 robot.teach(currentQ);
+%                 drawnow;
+%             catch e
+%                 continue;
+%             end
+%         end
+%     end
 end
 
 fprintf('\nTest passed successfully.\n');
 % and build a serial link manipulator
     
 %     robot = SerialLink(dh, 'name', 'IRB 140', ...
-%         'manufacturer', 'ABB', 'ikine', 'nooffset'); 
-    robot.teach()
+%          'manufacturer', 'ABB', 'ikine', 'nooffset'); 
+    robot.teach(qlist)
     % place the variables into the global workspace
     if nargin == 1
         r = robot;
